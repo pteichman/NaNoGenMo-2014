@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+# coding=utf8
+# Copyright (c) 2014 Peter Teichman
+
+from nltk.corpus import stopwords, wordnet
+from nltk.stem import WordNetLemmatizer
+
+import emoji
+import emoji.code
+import re
+import sys
+
+# This script converts archaic words to sleek, modern emoji. It loads
+# the emoji table in emoji.code, passes its tags through a
+# WordNetLemmatizer to create synonyms, and converts input words into
+# emoji one by one.
+#
+# Requires:
+#     emoji==0.1.0
+#     nltk==3.0.0
+#
+# You'll need to install wordnet and stopwords for nltk.
+
+
+def main():
+    # Use WordNet's lemmatizer to find synonyms for emoji terms.
+    wnl = WordNetLemmatizer()
+
+    # Don't emojify English stop words. Some frequently used words end
+    # up with poor emojification after lemmatization.
+    stop = stopwords.words("english")
+    text = readall(sys.argv[1])
+
+    print emojify(defaultmap(wnl), stop, text).encode("utf-8")
+
+
+def readall(fn):
+    with open(fn, "r") as fd:
+        # Project Gutenberg texts include a UTF-8 BOM.
+        return fd.read().decode('utf-8-sig')
+
+
+def emojify(emojimap, stop, text):
+    out = []
+    for word in re.findall("(\w+|\W+)", text, re.UNICODE | re.MULTILINE):
+        out.append(emojify_word(word, emojimap, stop))
+
+    return u"".join(out)
+
+
+def emojify_word(word, emojimap, stop):
+    e = emojimap.get(word.lower())
+    if not e or word.lower() in stop:
+        return word
+    return e
+
+
+def emojiwords():
+    words = []
+    for k, v in emoji.code.emojiCodeDict.items():
+        words.append((k.strip(":").replace("_", " "), v))
+
+    return words
+
+
+def defaultmap(wnl):
+    emojimap = {}
+    for w, v in emojiwords():
+        for l in synsets2lemmas(wordnet.synsets(w)):
+            emojimap[wnl.lemmatize(l.name())] = v
+
+    return emojimap
+
+
+def synsets2lemmas(synsets):
+    return [lemma for synset in synsets for lemma in synset.lemmas()]
+
+
+if __name__ == "__main__":
+    main()
